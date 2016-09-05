@@ -4,7 +4,6 @@ import sys
 import time
 import logging
 import hashlib
-import traceback
 import six
 from tornado import ioloop
 from tornado.websocket import websocket_connect
@@ -100,30 +99,28 @@ class TmcClient(Event):
         self.ws.write_message(message, True)
 
     def on_open(self, future):
-        try:
-            self.ws = future.result()
-            logger.info(
-                '[%s:%s]WebSocket Connect Success.',
-                self.url,
-                self.group_name
-            )
-            timestamp = int(round(time.time() * 1000))
-            logger.info('[%s:%s]TMC Handshake Start.', self.url, self.group_name)
+        if self._reconnecting:
+            self._reconnecting = False
+        self.ws = future.result()
+        logger.info(
+            '[%s:%s]WebSocket Connect Success.',
+            self.url,
+            self.group_name
+        )
+        timestamp = int(round(time.time() * 1000))
+        logger.info('[%s:%s]TMC Handshake Start.', self.url, self.group_name)
 
-            params = {
-                'timestamp': to_binary(timestamp),
-                'app_key': self.app_key,
-                'sdk': 'top-sdk-java-201403304',
-                'sign': self.create_sign(timestamp),
-                'group_name': self.group_name,
-            }
+        params = {
+            'timestamp': to_binary(timestamp),
+            'app_key': self.app_key,
+            'sdk': 'top-sdk-java-201403304',
+            'sign': self.create_sign(timestamp),
+            'group_name': self.group_name,
+        }
 
-            message = writer(Message(2, 0, flag=1, content=params))
-            self.write_binary(message)
-            self.fire('open')
-        except:
-            ioloop.IOLoop.instance().stop()
-            logger.error(traceback.format_exc())
+        message = writer(Message(2, 0, flag=1, content=params))
+        self.write_binary(message)
+        self.fire('open')
 
     def on_message(self, data):
         if data is None:
